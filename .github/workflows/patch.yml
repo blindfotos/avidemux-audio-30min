@@ -1,0 +1,31 @@
+name: Comprobar parche Avidemux 2.8.1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  comprobar:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Descargar nuestro repositorio
+        uses: actions/checkout@v4
+
+      - name: Descargar codigo fuente de Avidemux 2.8.1
+        run: |
+          git clone --depth 1 --branch 2.8.1 https://github.com/mean00/avidemux2.git avidemux
+
+      - name: Aplicar parche de 30 minutos
+        run: python3 patch_shift.py
+
+      - name: Generar informe de modificaciones
+        run: |
+          git -C avidemux diff --check
+          git -C avidemux diff > cambios-30min.patch
+          test -s cambios-30min.patch
+          cat cambios-30min.patch
+
+      - name: Guardar resultado
+        uses: actions/upload-artifact@v4
+        with:
+          name: parche-avidemux-30min
+          path: cambios-30min.patch
