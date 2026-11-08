@@ -1,0 +1,68 @@
+name: Instalar herramientas de compilacion MXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  herramientas:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Instalar herramientas necesarias
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential autoconf automake autopoint \
+            bison flex gperf intltool libtool libtool-bin \
+            libtool-doc nasm yasm \
+            pkg-config patch wget curl git \
+            python3 python3-mako python3-pip \
+            unzip p7zip-full xz-utils \
+            texinfo gettext \
+            libssl-dev libtool-bin
+
+      - name: Comprobar herramientas instaladas
+        run: |
+          {
+            echo "=== HERRAMIENTAS ==="
+            for tool in gcc g++ make cmake git libtool libtoolize \
+                        nasm yasm autoconf automake bison flex \
+                        gperf pkg-config python3; do
+              printf '%-18s ' "$tool"
+              command -v "$tool" || echo "NO DISPONIBLE"
+            done
+            echo "=== VERSIONES ==="
+            nasm -v
+            yasm --version | head -1
+            libtool --version | head -1
+            cmake --version | head -1
+            echo "=== ESPACIO LIBRE ==="
+            df -h .
+          } | tee informe-herramientas.txt
+
+      - name: Descargar MXE
+        run: |
+          git clone --depth 1 https://github.com/mxe/mxe.git mxe-source
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' > mxe-source/settings.mk
+
+      - name: Comprobar configuracion de MXE
+        run: |
+          {
+            echo "=== REVISION MXE ==="
+            git -C mxe-source rev-parse HEAD
+            echo "=== CONFIGURACION ==="
+            cat mxe-source/settings.mk
+            echo "=== OBJETIVOS DISPONIBLES ==="
+            make -C mxe-source help 2>&1 | head -70
+          } | tee informe-mxe.txt
+
+      - name: Guardar informes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: herramientas-mxe-instaladas
+          path: |
+            informe-herramientas.txt
+            informe-mxe.txt
+          if-no-files-found: warn
