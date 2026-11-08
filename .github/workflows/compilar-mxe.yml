@@ -18,7 +18,7 @@ jobs:
             bison flex gperf intltool libtool libtool-bin \
             nasm yasm pkg-config patch wget curl git \
             python3 python3-mako python3-pip \
-            unzip p7zip-full xz-utils texinfo gettext 
+            unzip p7zip-full xz-utils texinfo gettext \
             libssl-dev libgdk-pixbuf2.0-dev lzip
 
       - name: Descargar MXE
