@@ -1,0 +1,67 @@
+name: Preparar MXE 64 bits
+
+on:
+  workflow_dispatch:
+
+jobs:
+  preparar:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar nuestro repositorio
+        uses: actions/checkout@v4
+
+      - name: Descargar Avidemux 2.8.1
+        run: |
+          git clone --depth 1 --branch 2.8.1 https://github.com/mean00/avidemux2.git avidemux
+
+      - name: Descargar MXE
+        run: |
+          git clone --depth 1 https://github.com/mxe/mxe.git mxe-source
+
+      - name: Configurar solo Windows 64 bits
+        run: |
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' > mxe-source/settings.mk
+          cat mxe-source/settings.mk
+
+      - name: Examinar dependencias y versiones
+        run: |
+          {
+            echo "=== AVIDEMUX ==="
+            git -C avidemux describe --tags --always
+            echo "=== MXE ==="
+            git -C mxe-source rev-parse HEAD
+            echo "=== ARQUITECTURA ==="
+            cat mxe-source/settings.mk
+            echo "=== HERRAMIENTAS ==="
+            for tool in make gcc g++ cmake git patch wget curl \
+                        autoconf automake libtool pkg-config \
+                        nasm yasm bison flex; do
+              printf '%-16s ' "$tool"
+              command -v "$tool" || echo "NO DISPONIBLE"
+            done
+            echo "=== PAQUETES MXE ==="
+            for package in qtbase qttools qtwinextras sdl2 \
+                           faad2 fdk-aac fribidi lame libass \
+                           libvpx ogg opus vorbis x264 x265 \
+                           xvidcore; do
+              if [ -f "mxe-source/src/$package.mk" ]; then
+                echo "$package: encontrado"
+              else
+                echo "$package: NO ENCONTRADO"
+              fi
+            done
+            echo "=== ESPACIO ==="
+            df -h .
+            echo "=== MEMORIA ==="
+            free -h
+          } | tee informe-preparacion.txt
+
+      - name: Guardar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preparacion-mxe-64bits
+          path: informe-preparacion.txt
+          if-no-files-found: warn
