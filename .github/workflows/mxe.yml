@@ -1,0 +1,36 @@
+name: Inspeccionar MXE para Avidemux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspeccionar:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: Descargar Avidemux 2.8.1
+        run: |
+          git clone --depth 1 --branch 2.8.1 https://github.com/mean00/avidemux2.git avidemux
+
+      - name: Inspeccionar configuracion MXE
+        run: |
+          {
+            echo "===== MXE SETUP ====="
+            cat avidemux/mxe/mxe-setup.sh
+            echo "===== BOOTSTRAP WINDOWS ====="
+            cat avidemux/bootStrapCrossMingwQt5_mxe.sh
+            echo "===== ARCHIVOS MXE ====="
+            find avidemux/mxe -maxdepth 3 -type f | sort
+            echo "===== DOCUMENTACION ====="
+            cat avidemux/cross-compiling.txt
+          } > informe-mxe.txt
+
+      - name: Guardar informe
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-mxe
+          path: informe-mxe.txt
