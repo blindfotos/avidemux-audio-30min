@@ -1,0 +1,78 @@
+
+name: Compilar primera biblioteca MXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compilar-zlib:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Instalar herramientas de compilacion
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential autoconf automake autopoint \
+            bison flex gperf intltool libtool libtool-bin \
+            nasm yasm pkg-config patch wget curl git \
+            python3 python3-mako python3-pip \
+            unzip p7zip-full xz-utils texinfo gettext \
+            libssl-dev libgdk-pixbuf2.0-dev
+
+      - name: Descargar MXE
+        run: |
+          git clone https://github.com/mxe/mxe.git mxe-source
+          git -C mxe-source checkout bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' > mxe-source/settings.mk
+
+      - name: Recuperar descargas anteriores
+        uses: actions/cache@v4
+        with:
+          path: mxe-source/pkg
+          key: mxe-downloads-${{ runner.os }}-bdc0e9e2-zlib-v1
+
+      - name: Compilar zlib para Windows 64 bits
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          make -C mxe-source -j2 zlib \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            2>&1 | tee compilacion.log
+
+      - name: Preparar informe final
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "=== RESULTADO ==="
+            echo "Compilacion: ${{ steps.build.outcome }}"
+            echo "=== VERSION MXE ==="
+            git -C mxe-source rev-parse HEAD || true
+            echo "=== BIBLIOTECAS ZLIB ==="
+            find mxe-source/usr \
+              \( -iname '*zlib*' -o -name 'libz.a' \) \
+              2>/dev/null | head -40 || true
+            echo "=== ESPACIO LIBRE ==="
+            df -h .
+            echo "=== ULTIMAS LINEAS DEL REGISTRO ==="
+            tail -100 compilacion.log 2>/dev/null || true
+          } > resultado-zlib.txt
+
+      - name: Guardar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-compilacion-zlib
+          path: |
+            resultado-zlib.txt
+            compilacion.log
+          if-no-files-found: warn
+
+      - name: Comprobar resultado
+        if: always()
+        run: |
+          test "${{ steps.build.outcome }}" = "success"
