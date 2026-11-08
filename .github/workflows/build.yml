@@ -1,0 +1,82 @@
+name: Diagnostico compilacion Avidemux 2.8.1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar nuestro repositorio
+        uses: actions/checkout@v4
+
+      - name: Informacion del sistema
+        run: |
+          uname -a
+          lsb_release -a
+          df -h
+          free -h
+
+      - name: Comprobar herramientas disponibles
+        run: |
+          for tool in git cmake make ninja gcc g++ python3 \
+                      x86_64-w64-mingw32-gcc \
+                      x86_64-w64-mingw32-g++; do
+            echo "===== $tool ====="
+            command -v "$tool" || true
+          done
+
+      - name: Comprobar paquetes instalados
+        run: |
+          dpkg-query -W 'mingw-w64*' 'qtbase5-dev*' \
+            'nasm*' 'yasm*' 'pkg-config*' 2>/dev/null || true
+
+      - name: Descargar fuentes Avidemux 2.8.1
+        run: |
+          git clone --depth 1 --branch 2.8.1 \
+            https://github.com/mean00/avidemux2.git avidemux
+
+      - name: Aplicar parche de desplazamiento
+        run: |
+          python3 patch_shift.py
+          git -C avidemux diff --check
+          git -C avidemux diff --stat
+
+      - name: Localizar scripts de compilacion
+        run: |
+          find avidemux -maxdepth 4 -type f \
+            \( -iname '*mxe*' -o -iname '*cross*' -o \
+               -iname '*bootstrap*' -o -iname '*build*win*' \) \
+            | sort | head -100
+
+      - name: Guardar informe
+        if: always()
+        run: |
+          {
+            echo "=== SISTEMA ==="
+            uname -a
+            echo "=== HERRAMIENTAS ==="
+            for tool in cmake ninja nasm yasm \
+                        x86_64-w64-mingw32-gcc \
+                        x86_64-w64-mingw32-g++; do
+              command -v "$tool" || true
+            done
+            echo "=== DISCO ==="
+            df -h
+            echo "=== SCRIPTS ==="
+            if [ -d avidemux ]; then
+              find avidemux -maxdepth 4 -type f \
+                \( -iname '*mxe*' -o -iname '*cross*' -o \
+                   -iname '*bootstrap*' -o -iname '*build*win*' \) \
+                | sort | head -100
+            fi
+          } > diagnostico.txt
+
+      - name: Publicar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-compilacion
+          path: diagnostico.txt
