@@ -1,4 +1,3 @@
-
 name: Comprobar por que GCC se recompila
 
 on:
@@ -13,10 +12,8 @@ jobs:
       - name: Descargar MXE
         run: |
           git clone https://github.com/mxe/mxe.git mxe-source
-          git -C mxe-source checkout \
-            bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
-          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' \
-            > mxe-source/settings.mk
+          git -C mxe-source checkout bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' > mxe-source/settings.mk
 
       - name: Recuperar cache x264
         id: cache
@@ -28,23 +25,31 @@ jobs:
           key: mxe-64bits-bdc0e9e2-x264-v1
           fail-on-cache-miss: true
 
-      - name: Comprobar fechas y marcadores
+      - name: Inspeccionar recetas y fechas
         shell: bash
         run: |
           {
-            echo "=== CACHE RECUPERADA ==="
-            echo "${{ steps.cache.outputs.cache-hit }}"
-            echo "=== FECHAS ==="
-            for f in \
-              mxe-source/src/gcc.mk \
-              mxe-source/src/binutils.mk \
-              mxe-source/usr/x86_64-w64-mingw32.shared/installed/gcc \
-              mxe-source/usr/x86_64-w64-mingw32.shared/installed/binutils \
-              mxe-source/usr/x86_64-w64-mingw32.shared/installed/x264; do
-              stat -c '%y %n' "$f" || true
+            echo "=== CACHE ==="
+            echo "Cache hit: ${{ steps.cache.outputs.cache-hit }}"
+            echo "=== REVISION MXE ==="
+            git -C mxe-source rev-parse HEAD
+            echo "=== RECETAS LOCALIZADAS ==="
+            find mxe-source -maxdepth 5 -type f \
+              \( -name 'gcc.mk' -o -name 'binutils.mk' -o -name 'x264.mk' \) \
+              -print
+            echo "=== FECHAS DE RECETAS ==="
+            find mxe-source -maxdepth 5 -type f \
+              \( -name 'gcc.mk' -o -name 'binutils.mk' -o -name 'x264.mk' \) \
+              -exec stat -c '%y %n' {} \;
+            echo "=== MARCADORES INSTALADOS ==="
+            find mxe-source/usr -path '*/installed/*' -type f \
+              \( -iname '*gcc*' -o -iname '*binutils*' -o \
+                 -iname '*x264*' -o -iname '*qtbase*' \) \
+              -exec stat -c '%y %n' {} \;
+            echo "=== DIRECTORIOS ==="
+            for d in mxe-source/usr mxe-source/pkg mxe-source/tmp; do
+              if test -d "$d"; then du -sh "$d"; fi
             done
-            echo "=== VERSION DE MAKE ==="
-            make --version | head -1
           } > informe-fechas.txt
 
       - name: Simular construccion de GCC
@@ -52,38 +57,39 @@ jobs:
         run: |
           timeout 180 make -C mxe-source -n -j1 gcc \
             MXE_TARGETS=x86_64-w64-mingw32.shared \
-            > simulacion-gcc.txt 2>&1 || \
-            echo "La simulacion GCC devolvio un aviso" \
-              >> simulacion-gcc.txt
+            > simulacion-gcc.txt 2>&1
+          echo "Codigo de salida: $?" >> simulacion-gcc.txt
+        continue-on-error: true
 
       - name: Simular construccion de x264
         shell: bash
         run: |
           timeout 180 make -C mxe-source -n -j1 x264 \
             MXE_TARGETS=x86_64-w64-mingw32.shared \
-            > simulacion-x264.txt 2>&1 || \
-            echo "La simulacion x264 devolvio un aviso" \
-              >> simulacion-x264.txt
+            > simulacion-x264.txt 2>&1
+          echo "Codigo de salida: $?" >> simulacion-x264.txt
+        continue-on-error: true
 
-      - name: Resumir resultados
+      - name: Preparar resumen
         if: always()
         shell: bash
         run: |
           {
+            echo "=== FECHAS ==="
             cat informe-fechas.txt 2>/dev/null || true
-            echo "=== SIMULACION GCC ==="
-            head -60 simulacion-gcc.txt 2>/dev/null || true
-            echo "=== SIMULACION X264 ==="
-            head -60 simulacion-x264.txt 2>/dev/null || true
-            echo "=== TAMANOS DE LOS REGISTROS ==="
-            wc -l simulacion-*.txt 2>/dev/null || true
+            echo "=== GCC ==="
+            head -80 simulacion-gcc.txt 2>/dev/null || true
+            echo "=== X264 ==="
+            head -80 simulacion-x264.txt 2>/dev/null || true
+            echo "=== TAMANOS ==="
+            wc -lc simulacion-*.txt 2>/dev/null || true
           } > resumen.txt
 
       - name: Guardar diagnostico
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostico-recompilacion
+          name: diagnostico-recompilacion-corregido
           path: |
             resumen.txt
             informe-fechas.txt
