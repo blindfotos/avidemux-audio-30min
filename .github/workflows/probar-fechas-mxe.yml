@@ -1,0 +1,107 @@
+
+name: Probar correccion de fechas MXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  comparar:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Descargar MXE
+        run: |
+          git clone https://github.com/mxe/mxe.git mxe-source
+          git -C mxe-source checkout bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' > mxe-source/settings.mk
+
+      - name: Recuperar cache x264
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-x264-v1
+          fail-on-cache-miss: true
+
+      - name: Comparar simulaciones
+        shell: bash
+        run: |
+          set -u
+
+          echo "Cache recuperada: ${{ steps.cache.outputs.cache-hit }}"
+
+          echo "=== ANTES ==="
+          set +e
+          timeout 180 make -C mxe-source -n -j1 gcc \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            > antes-gcc.txt 2>&1
+          A_GCC=$?
+
+          timeout 180 make -C mxe-source -n -j1 x264 \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            > antes-x264.txt 2>&1
+          A_X264=$?
+
+          echo "=== AJUSTAR FECHAS ==="
+          git -C mxe-source ls-files -z |
+            while IFS= read -r -d '' archivo; do
+              touch -d '2000-01-01 00:00:00 UTC' \
+                "mxe-source/$archivo"
+            done
+
+          echo "=== DESPUES ==="
+          timeout 180 make -C mxe-source -n -j1 gcc \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            > despues-gcc.txt 2>&1
+          D_GCC=$?
+
+          timeout 180 make -C mxe-source -n -j1 x264 \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            > despues-x264.txt 2>&1
+          D_X264=$?
+
+          {
+            echo "=== CODIGOS DE SALIDA ==="
+            echo "GCC antes: $A_GCC"
+            echo "GCC despues: $D_GCC"
+            echo "x264 antes: $A_X264"
+            echo "x264 despues: $D_X264"
+
+            echo "=== LINEAS DE SIMULACION ==="
+            wc -l antes-gcc.txt despues-gcc.txt
+            wc -l antes-x264.txt despues-x264.txt
+
+            echo "=== TAMANOS EN BYTES ==="
+            wc -c antes-gcc.txt despues-gcc.txt
+            wc -c antes-x264.txt despues-x264.txt
+
+            echo "=== PRIMERAS LINEAS GCC ANTES ==="
+            head -30 antes-gcc.txt
+
+            echo "=== PRIMERAS LINEAS GCC DESPUES ==="
+            head -30 despues-gcc.txt
+
+            echo "=== PRIMERAS LINEAS X264 ANTES ==="
+            head -30 antes-x264.txt
+
+            echo "=== PRIMERAS LINEAS X264 DESPUES ==="
+            head -30 despues-x264.txt
+          } > comparacion.txt
+
+          cat comparacion.txt
+
+      - name: Guardar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparacion-fechas-mxe
+          path: |
+            comparacion.txt
+            antes-gcc.txt
+            despues-gcc.txt
+            antes-x264.txt
+            despues-x264.txt
+          if-no-files-found: warn
