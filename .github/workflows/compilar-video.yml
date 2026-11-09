@@ -63,22 +63,36 @@ jobs:
           sha256sum mxe-source/pkg/x265_4.2.tar.gz
 
 
+
+      - name: Reparar rutas de compiladores
+        shell: bash
+        run: |
+          set -e
+
+          BASE="$PWD/mxe-source/usr"
+          DESTINO="$BASE/x86_64-pc-linux-gnu/bin"
+
+          mkdir -p "$DESTINO"
+
+          for herramienta in gcc g++; do
+            ORIGEN="$BASE/bin/x86_64-w64-mingw32.shared-$herramienta"
+            ENLACE="$DESTINO/x86_64-w64-mingw32.shared-$herramienta"
+
+            test -x "$ORIGEN"
+            ln -sfn "$ORIGEN" "$ENLACE"
+
+            echo "Comprobando $herramienta:"
+            "$ENLACE" --version | head -1
+          done
+
       - name: Compilar x265
         shell: bash
         run: |
           export PATH="$PWD/mxe-source/usr/bin:$PATH"
 
-          echo "Comprobando GCC:"
-          command -v x86_64-w64-mingw32.shared-gcc
-          x86_64-w64-mingw32.shared-gcc --version
-
-          echo "Comprobando G++:"
-          command -v x86_64-w64-mingw32.shared-g++
-          x86_64-w64-mingw32.shared-g++ --version
-
-          echo "Compilando x265:"
           make -C mxe-source -j2 x265 \
             MXE_TARGETS=x86_64-w64-mingw32.shared
+
 
 
       - name: Comprobar resultado
