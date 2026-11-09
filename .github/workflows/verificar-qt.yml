@@ -1,0 +1,28 @@
+
+name: Verificar cache Qt5
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Recuperar cache de Qt
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-qtbase-v1
+          lookup-only: true
+          fail-on-cache-miss: true
+
+      - name: Confirmar que existe la cache
+        run: |
+          echo "CACHE HIT: ${{ steps.cache.outputs.cache-hit }}"
+          test "${{ steps.cache.outputs.cache-hit }}" = "true"
+          echo "CACHE QT DISPONIBLE"
