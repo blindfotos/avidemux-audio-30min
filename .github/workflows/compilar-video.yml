@@ -62,10 +62,24 @@ jobs:
           echo "Archivo descargado correctamente"
           sha256sum mxe-source/pkg/x265_4.2.tar.gz
 
+
       - name: Compilar x265
+        shell: bash
         run: |
+          export PATH="$PWD/mxe-source/usr/bin:$PATH"
+
+          echo "Comprobando GCC:"
+          command -v x86_64-w64-mingw32.shared-gcc
+          x86_64-w64-mingw32.shared-gcc --version
+
+          echo "Comprobando G++:"
+          command -v x86_64-w64-mingw32.shared-g++
+          x86_64-w64-mingw32.shared-g++ --version
+
+          echo "Compilando x265:"
           make -C mxe-source -j2 x265 \
             MXE_TARGETS=x86_64-w64-mingw32.shared
+
 
       - name: Comprobar resultado
         shell: bash
