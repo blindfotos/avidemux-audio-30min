@@ -1,0 +1,83 @@
+
+name: Diagnosticar reconstruccion de GCC
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar MXE
+        run: |
+          git clone https://github.com/mxe/mxe.git mxe-source
+          git -C mxe-source checkout \
+            bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' \
+            > mxe-source/settings.mk
+
+      - name: Recuperar cache de x264
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-x264-v1
+          fail-on-cache-miss: true
+
+      - name: Analizar estado de MXE
+        shell: bash
+        run: |
+          {
+            echo "=== CACHE ==="
+            echo "Cache hit: ${{ steps.cache.outputs.cache-hit }}"
+
+            echo "=== VERSION MXE ==="
+            git -C mxe-source rev-parse HEAD
+
+            echo "=== DIRECTORIOS PRINCIPALES ==="
+            ls -la mxe-source
+            ls -la mxe-source/usr
+
+            echo "=== MARCADORES DE INSTALACION ==="
+            find mxe-source/usr -path '*/installed/*' \
+              -type f | sort | grep -E \
+              'gcc|binutils|mingw|zlib|qtbase|x264' || true
+
+            echo "=== COMPILADORES DISPONIBLES ==="
+            find mxe-source/usr -type f \
+              \( -name '*-gcc' -o -name '*-g++' \
+              -o -name '*-gcc.exe' \) \
+              | head -40
+
+            echo "=== DIRECTORIOS DE CONSTRUCCION ==="
+            for d in mxe-source/tmp mxe-source/log \
+                     mxe-source/usr mxe-source/pkg; do
+              if test -d "$d"; then
+                du -sh "$d"
+              else
+                echo "$d NO EXISTE"
+              fi
+            done
+
+            echo "=== FECHAS DE MARCADORES GCC ==="
+            find mxe-source/usr -path '*/installed/*' \
+              -iname '*gcc*' -type f \
+              -printf '%TY-%Tm-%Td %TH:%TM %p\n' || true
+
+            echo "=== REGLAS DE GCC ==="
+            grep -nE 'gcc|binutils' \
+              mxe-source/src/gcc.mk | head -60 || true
+
+          } | tee diagnostico-gcc.txt
+
+      - name: Guardar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-gcc
+          path: diagnostico-gcc.txt
+          if-no-files-found: warn
