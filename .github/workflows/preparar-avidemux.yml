@@ -1,0 +1,146 @@
+
+name: Preparar compilacion Avidemux 2.8.1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  preparar:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Descargar nuestro proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            git cmake ninja-build python3 file \
+            build-essential pkg-config
+
+      - name: Descargar MXE
+        run: |
+          git clone https://github.com/mxe/mxe.git mxe-source
+          git -C mxe-source checkout \
+            bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' \
+            > mxe-source/settings.mk
+
+      - name: Recuperar cache x265
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-x265-v1
+          fail-on-cache-miss: true
+
+      - name: Corregir fechas de MXE
+        shell: bash
+        run: |
+          git -C mxe-source ls-files -z |
+            while IFS= read -r -d '' archivo; do
+              touch -d '2000-01-01 00:00:00 UTC' \
+                "mxe-source/$archivo"
+            done
+
+      - name: Reparar rutas de compiladores
+        shell: bash
+        run: |
+          set -e
+
+          BASE="$PWD/mxe-source/usr"
+          DESTINO="$BASE/x86_64-pc-linux-gnu/bin"
+
+          mkdir -p "$DESTINO"
+
+          for herramienta in gcc g++; do
+            ORIGEN="$BASE/bin/x86_64-w64-mingw32.shared-$herramienta"
+            ENLACE="$DESTINO/x86_64-w64-mingw32.shared-$herramienta"
+
+            test -x "$ORIGEN"
+            ln -sfn "$ORIGEN" "$ENLACE"
+            "$ENLACE" --version | head -1
+          done
+
+      - name: Descargar Avidemux 2.8.1
+        shell: bash
+        run: |
+          git clone https://github.com/mean00/avidemux2.git avidemux
+          git -C avidemux checkout 2.8.1
+          git -C avidemux rev-parse HEAD
+
+      - name: Aplicar parche de 30 minutos
+        shell: bash
+        run: |
+          set -e
+          python3 patch_shift.py
+
+          grep -n -- '-1800000' \
+            avidemux/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui
+
+          grep -n -- '1800000' \
+            avidemux/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui
+
+          grep -n 'validateNumber("timeShift"' \
+            avidemux/avidemux_plugins/ADM_scriptEngines/qtScript/src/AudioOutput.cpp
+
+      - name: Examinar compilacion Windows
+        shell: bash
+        run: |
+          {
+            echo "=== VERSION DE AVIDEMUX ==="
+            git -C avidemux describe --tags --always
+
+            echo
+            echo "=== COMPILADORES ==="
+            mxe-source/usr/bin/x86_64-w64-mingw32.shared-gcc --version | head -1
+            mxe-source/usr/bin/x86_64-w64-mingw32.shared-g++ --version | head -1
+
+            echo
+            echo "=== HERRAMIENTAS MXE ==="
+            ls -l mxe-source/usr/bin/*cmake* 2>/dev/null || true
+            ls -l mxe-source/usr/bin/*qmake* 2>/dev/null || true
+
+            echo
+            echo "=== MARCADORES DE DEPENDENCIAS ==="
+            find mxe-source/usr \
+              -path '*/installed/*' -type f \
+              -printf '%p\n' | sort
+
+            echo
+            echo "=== SCRIPTS DE COMPILACION ==="
+            ls -l avidemux/bootStrapCrossMingwQt5_mxe.sh
+            ls -l avidemux/mxe/mxe-setup.sh
+            ls -l avidemux/cmake/admCrossCompile.cmake
+
+            echo
+            echo "=== SCRIPT PRINCIPAL ==="
+            sed -n '1,260p' \
+              avidemux/bootStrapCrossMingwQt5_mxe.sh
+
+            echo
+            echo "=== CONFIGURACION MXE ==="
+            sed -n '1,220p' avidemux/mxe/mxe-setup.sh
+
+            echo
+            echo "=== REFERENCIAS A DEPENDENCIAS ==="
+            grep -Ein \
+              'cmake|ffmpeg|qt|pkg|mxe|toolchain|prefix|cross' \
+              avidemux/bootStrapCrossMingwQt5_mxe.sh \
+              avidemux/mxe/mxe-setup.sh | head -120
+
+          } > informe-avidemux.txt 2>&1
+
+          cat informe-avidemux.txt
+
+      - name: Guardar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preparacion-avidemux-281
+          path: informe-avidemux.txt
+          if-no-files-found: warn
