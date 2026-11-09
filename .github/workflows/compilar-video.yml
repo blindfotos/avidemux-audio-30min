@@ -1,13 +1,13 @@
 
-name: Compilar bibliotecas de video MXE
+name: Compilar x265 con MXE
 
 on:
   workflow_dispatch:
 
 jobs:
-  video:
+  compilar-x265:
     runs-on: ubuntu-22.04
-    timeout-minutes: 240
+    timeout-minutes: 180
 
     steps:
       - name: Instalar herramientas
@@ -19,7 +19,7 @@ jobs:
             nasm yasm pkg-config patch wget curl git \
             python3 python3-mako python3-pip \
             unzip p7zip-full xz-utils texinfo gettext \
-            libssl-dev libgdk-pixbuf2.0-dev lzip
+            libssl-dev libgdk-pixbuf2.0-dev lzip cmake
 
       - name: Descargar MXE
         run: |
@@ -29,84 +29,71 @@ jobs:
           echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' \
             > mxe-source/settings.mk
 
-      - name: Recuperar cache de audio
-        id: cache
+      - name: Recuperar cache x264
         uses: actions/cache/restore@v4
         with:
           path: |
             mxe-source/usr
             mxe-source/pkg
-          key: mxe-64bits-bdc0e9e2-audio-v1
+          key: mxe-64bits-bdc0e9e2-x264-v1
           fail-on-cache-miss: true
 
-      - name: Comprobar cache recuperada
-        run: |
-          test "${{ steps.cache.outputs.cache-hit }}" = "true"
-          test -f \
-            mxe-source/usr/x86_64-w64-mingw32.shared/installed/qtbase
-          for p in ogg vorbis opus lame; do
-            test -f \
-              "mxe-source/usr/x86_64-w64-mingw32.shared/installed/$p"
-          done
-          echo "Qt y audio recuperados correctamente"
-
-      - name: Compilar x264 y x265
-        id: build
-        continue-on-error: true
+      - name: Corregir fechas de MXE
         shell: bash
         run: |
-          set -o pipefail
-          make -C mxe-source -j2 x264 \
-            MXE_TARGETS=x86_64-w64-mingw32.shared \
-            2>&1 | tee compilacion-video.log
-
-      - name: Generar informe
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "=== RESULTADO ==="
-            echo "${{ steps.build.outcome }}"
-            echo "=== BIBLIOTECAS ==="
-            for p in x264; do
-              if test -f \
-                "mxe-source/usr/x86_64-w64-mingw32.shared/installed/$p"; then
-                echo "$p: OK"
-              else
-                echo "$p: PENDIENTE"
-              fi
+          git -C mxe-source ls-files -z |
+            while IFS= read -r -d '' archivo; do
+              touch -d '2000-01-01 00:00:00 UTC' \
+                "mxe-source/$archivo"
             done
-            echo "=== TAMANO ==="
-            du -sh mxe-source/usr mxe-source/pkg \
-              2>/dev/null || true
-            echo "=== ESPACIO LIBRE ==="
-            df -h .
-            echo "=== ULTIMAS 100 LINEAS ==="
-            tail -100 compilacion-video.log \
-              2>/dev/null || true
-          } > informe-video.txt
 
-      - name: Guardar informe
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: resultado-compilacion-video
-          path: |
-            informe-video.txt
-            compilacion-video.log
-          if-no-files-found: warn
-          retention-days: 30
+      - name: Descargar x265 desde VideoLAN
+        shell: bash
+        run: |
+          mkdir -p mxe-source/pkg
+          curl --fail --location --retry 3 \
+            --output mxe-source/pkg/x265_4.2.tar.gz \
+            https://download.videolan.org/pub/videolan/x265/x265_4.2.tar.gz
 
-      - name: Guardar cache ampliada de video
-        if: steps.build.outcome == 'success'
+          test -s mxe-source/pkg/x265_4.2.tar.gz
+          tar -tzf mxe-source/pkg/x265_4.2.tar.gz \
+            > /dev/null
+
+          echo "Archivo descargado correctamente"
+          sha256sum mxe-source/pkg/x265_4.2.tar.gz
+
+      - name: Compilar x265
+        run: |
+          make -C mxe-source -j2 x265 \
+            MXE_TARGETS=x86_64-w64-mingw32.shared
+
+      - name: Comprobar resultado
+        shell: bash
+        run: |
+          echo "Marcadores de x265:"
+          find mxe-source/usr \
+            -path '*/installed/*' \
+            -iname '*x265*' -print
+
+          echo "Bibliotecas x265:"
+          find mxe-source/usr \
+            \( -iname '*x265*.dll' -o \
+               -iname '*x265*.a' \) -print
+
+      - name: Guardar cache con x265
         uses: actions/cache/save@v4
         with:
           path: |
             mxe-source/usr
             mxe-source/pkg
-          key: mxe-64bits-bdc0e9e2-x264-v1
+          key: mxe-64bits-bdc0e9e2-x265-v1
 
-      - name: Comprobar resultado
+      - name: Guardar informe
         if: always()
-        run: |
-          test "${{ steps.build.outcome }}" = "success"
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-compilacion-x265
+          path: |
+            mxe-source/log
+            mxe-source/src/x265.mk
+          if-no-files-found: ignore
