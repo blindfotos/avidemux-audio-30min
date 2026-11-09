@@ -1,0 +1,104 @@
+
+name: Comprobar compilador MXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar MXE
+        run: |
+          git clone https://github.com/mxe/mxe.git mxe-source
+          git -C mxe-source checkout \
+            bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' \
+            > mxe-source/settings.mk
+
+      - name: Recuperar cache x264
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-x264-v1
+          fail-on-cache-miss: true
+
+      - name: Diagnosticar compiladores
+        shell: bash
+        run: |
+          set +e
+
+          {
+            echo "=== CACHE ==="
+            echo "Cache hit: ${{ steps.cache.outputs.cache-hit }}"
+
+            echo
+            echo "=== CARPETAS DE MXE ==="
+            ls -ld mxe-source/usr
+            ls -ld mxe-source/usr/bin
+            ls -ld mxe-source/usr/x86_64-w64-mingw32.shared/bin
+
+            echo
+            echo "=== COMPILADORES EN USR/BIN ==="
+            find mxe-source/usr/bin -maxdepth 1 \
+              \( -name '*gcc*' -o -name '*g++*' \
+                 -o -name '*cmake*' \) -ls
+
+            echo
+            echo "=== COMPILADORES EN TODO USR ==="
+            find mxe-source/usr \
+              \( -name '*gcc' -o -name '*g++' \
+                 -o -name '*gcc.exe' -o -name '*g++.exe' \) \
+              -print
+
+            echo
+            echo "=== ENLACES SIMBOLICOS ROTOS ==="
+            find mxe-source/usr -xtype l -print | head -100
+
+            echo
+            echo "=== MARCADORES GCC ==="
+            find mxe-source/usr -path '*/installed/*' \
+              \( -iname '*gcc*' -o -iname '*binutils*' \) \
+              -ls
+
+            echo
+            echo "=== PRUEBA GCC ==="
+            GCC="$PWD/mxe-source/usr/bin/x86_64-w64-mingw32.shared-gcc"
+            ls -l "$GCC"
+            readlink -f "$GCC"
+            "$GCC" --version
+
+            echo
+            echo "=== PRUEBA G++ ==="
+            GPP="$PWD/mxe-source/usr/bin/x86_64-w64-mingw32.shared-g++"
+            ls -l "$GPP"
+            readlink -f "$GPP"
+            "$GPP" --version
+
+            echo
+            echo "=== VARIABLES DE ENTORNO ==="
+            echo "PATH=$PATH"
+
+            echo
+            echo "=== ARCHIVOS GCC Y G++ ==="
+            find mxe-source/usr/bin -maxdepth 1 \
+              \( -name '*gcc*' -o -name '*g++*' \) \
+              -exec file {} \;
+
+          } > diagnostico-compilador.txt 2>&1
+
+          cat diagnostico-compilador.txt
+
+      - name: Guardar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-compilador-mxe
+          path: diagnostico-compilador.txt
+          if-no-files-found: warn
