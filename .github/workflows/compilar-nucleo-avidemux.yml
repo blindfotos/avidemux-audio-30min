@@ -1,0 +1,143 @@
+
+name: Compilar nucleo Avidemux 2.8.1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compilar:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Descargar nuestro proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential cmake git python3 pkg-config \
+            autoconf automake autopoint bison flex gperf \
+            intltool libtool libtool-bin nasm yasm \
+            patch wget curl unzip p7zip-full xz-utils \
+            texinfo gettext libssl-dev \
+            libgdk-pixbuf2.0-dev lzip
+
+      - name: Descargar MXE
+        run: |
+          git clone https://github.com/mxe/mxe.git mxe-source
+          git -C mxe-source checkout \
+            bdc0e9e2cf878d64086a6f3b51bc443d4c5ebb9c
+
+          echo 'MXE_TARGETS := x86_64-w64-mingw32.shared' \
+            > mxe-source/settings.mk
+
+      - name: Recuperar cache x265
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-x265-v1
+          fail-on-cache-miss: true
+
+      - name: Corregir fechas de MXE
+        shell: bash
+        run: |
+          git -C mxe-source ls-files -z |
+            while IFS= read -r -d '' archivo; do
+              touch -d '2000-01-01 00:00:00 UTC' \
+                "mxe-source/$archivo"
+            done
+
+      - name: Reparar rutas de compiladores
+        shell: bash
+        run: |
+          set -e
+
+          BASE="$PWD/mxe-source/usr"
+          DESTINO="$BASE/x86_64-pc-linux-gnu/bin"
+
+          mkdir -p "$DESTINO"
+
+          for herramienta in gcc g++; do
+            ORIGEN="$BASE/bin/x86_64-w64-mingw32.shared-$herramienta"
+            ENLACE="$DESTINO/x86_64-w64-mingw32.shared-$herramienta"
+
+            test -x "$ORIGEN"
+            ln -sfn "$ORIGEN" "$ENLACE"
+            "$ENLACE" --version | head -1
+          done
+
+          echo "$BASE/bin" >> "$GITHUB_PATH"
+
+      - name: Descargar Avidemux 2.8.1
+        run: |
+          git clone https://github.com/mean00/avidemux2.git avidemux
+          git -C avidemux checkout 2.8.1
+
+      - name: Aplicar parche de 30 minutos
+        run: |
+          python3 patch_shift.py
+
+          grep -q -- '<number>-1800000</number>' \
+            avidemux/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui
+
+          grep -q -- '<number>1800000</number>' \
+            avidemux/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui
+
+          grep -q -- 'timeShift, -1800000, 1800000' \
+            avidemux/avidemux_plugins/ADM_scriptEngines/qtScript/src/AudioOutput.cpp
+
+          echo "Parche verificado"
+
+      - name: Compilar nucleo de Avidemux
+        shell: bash
+        run: |
+          set -o pipefail
+
+          cd avidemux
+
+          bash bootStrapCrossMingwQt5_mxe.sh \
+            --64 \
+            --mxe-root="$GITHUB_WORKSPACE/mxe-source" \
+            --without-qt \
+            --without-cli \
+            --without-plugins \
+            --nopkg \
+            2>&1 | tee "$GITHUB_WORKSPACE/compilacion-nucleo.txt"
+
+      - name: Comprobar archivos generados
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "=== ARCHIVOS COMPILADOS ==="
+            find avidemux/buildMingwCore-x86_64 \
+              -type f \
+              \( -name '*.dll' -o -name '*.a' \
+                 -o -name '*.exe' \) \
+              -print | head -100
+
+            echo
+            echo "=== ARCHIVOS INSTALADOS ==="
+            find mxe-source/usr/x86_64-w64-mingw32.shared/out/avidemux \
+              -type f | head -100
+          } > resultado-nucleo.txt 2>&1
+
+          cat resultado-nucleo.txt
+
+      - name: Guardar registros
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-nucleo-avidemux
+          path: |
+            compilacion-nucleo.txt
+            resultado-nucleo.txt
+            avidemux/buildMingwCore-x86_64/CMakeCache.txt
+            avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeConfigureLog.yaml
+            avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeOutput.log
+            avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeError.log
+          if-no-files-found: warn
