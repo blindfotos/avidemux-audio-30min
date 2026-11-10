@@ -218,6 +218,15 @@ jobs:
           fi
 
 
+      - name: Guardar cache MXE con QtWinExtras
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            mxe-source/usr
+            mxe-source/pkg
+          key: mxe-64bits-bdc0e9e2-qtwinextras-v1
+
+
       - name: Diagnosticar biblioteca Qt5WinExtras
         shell: bash
         run: |
@@ -318,7 +327,17 @@ jobs:
       - name: Compilar Avidemux completo
         shell: bash
         run: |
+
           set -o pipefail
+
+          QT5_LIB="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared/qt5/lib"
+
+          test -f "$QT5_LIB/libQt5WinExtras.a"
+
+          export LIBRARY_PATH="$QT5_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
+
+          echo "=== RUTA DE QTWINEXTRAS ==="
+          echo "$LIBRARY_PATH"
 
           cd avidemux
 
