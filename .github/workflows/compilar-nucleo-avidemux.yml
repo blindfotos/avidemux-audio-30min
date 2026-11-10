@@ -208,8 +208,9 @@ jobs:
             -iname '*Qt5WinExtras*' \
             -print
 
-          if [ -f "$DESTINO/lib/libQt5WinExtras.dll.a" ] \
-             || [ -f "$DESTINO/lib/libQt5WinExtras.a" ]; then
+
+           if [ -f "$DESTINO/qt5/lib/libQt5WinExtras.dll.a" ] \
+              || [ -f "$DESTINO/qt5/lib/libQt5WinExtras.a" ]; then
             echo "QTWINEXTRAS INSTALADO CORRECTAMENTE"
           else
             echo "ERROR: falta la biblioteca Qt5WinExtras"
@@ -245,8 +246,8 @@ jobs:
             -print-search-dirs
 
           echo "=== RESULTADO ==="
-          if [ -f "$TARGET/lib/libQt5WinExtras.dll.a" ] \
-             || [ -f "$TARGET/lib/libQt5WinExtras.a" ]; then
+          if [ -f "$TARGET/qt5/lib/libQt5WinExtras.dll.a" ] \
+          || [ -f "$TARGET/qt5/lib/libQt5WinExtras.a" ]; then
             echo "BIBLIOTECA ENCONTRADA"
           else
             echo "BIBLIOTECA NO ENCONTRADA"
