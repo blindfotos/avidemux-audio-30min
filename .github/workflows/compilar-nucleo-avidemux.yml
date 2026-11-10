@@ -177,25 +177,65 @@ jobs:
             --nopkg \
             2>&1 | tee "$GITHUB_WORKSPACE/compilacion-nucleo.txt"
 
-      - name: Comprobar archivos generados
+
+      - name: Comprobar archivos y preparar nucleo
         if: success()
         shell: bash
         run: |
-          {
-            echo "=== ARCHIVOS COMPILADOS ==="
-            find avidemux/buildMingwCore-x86_64 \
-              -type f \
-              \( -name '*.dll' -o -name '*.a' \
-                 -o -name '*.exe' \) \
-              -print | head -100
+          set -e
 
-            echo
-            echo "=== ARCHIVOS INSTALADOS ==="
-            find mxe-source/usr/x86_64-w64-mingw32.shared/out/avidemux \
-              -type f | head -100
-          } > resultado-nucleo.txt 2>&1
+          mkdir -p paquete-nucleo
 
-          cat resultado-nucleo.txt
+          echo "=== BUSCANDO CARPETAS DE COMPILACION ===" \
+            | tee resultado-nucleo.txt
+
+          find avidemux -maxdepth 3 -type d \
+            -name 'buildMingwCore*' \
+            -print | tee -a resultado-nucleo.txt
+
+          echo "=== BUSCANDO BIBLIOTECAS DEL NUCLEO ===" \
+            | tee -a resultado-nucleo.txt
+
+          find avidemux -type f \
+            \( -name 'libADM_core*.dll' \
+               -o -name 'libADM_core*.a' \
+               -o -name 'ADM_core*.dll' \) \
+            -print | tee -a resultado-nucleo.txt
+
+          echo "=== LOCALIZANDO INSTALACION ===" \
+            | tee -a resultado-nucleo.txt
+
+          find avidemux -type f \
+            -name '*ADM_core*' \
+            -print | head -80 | tee -a resultado-nucleo.txt
+
+          echo "=== GUARDANDO DIRECTORIOS DEL NUCLEO ==="
+
+          find avidemux -maxdepth 3 -type d \
+            -name 'buildMingwCore*' -print0 \
+            > directorios-nucleo.txt
+
+          if [ ! -s directorios-nucleo.txt ]; then
+            echo "ERROR: no se encontro el directorio del nucleo"
+            exit 1
+          fi
+
+          tar -czf paquete-nucleo/nucleo-build.tar.gz \
+            --null -T directorios-nucleo.txt
+
+          echo "=== TAMANO DEL PAQUETE ==="
+          ls -lh paquete-nucleo/
+
+          echo "Preparacion completada"
+
+      - name: Guardar nucleo compilado
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avidemux-281-nucleo-compilado
+          path: paquete-nucleo/nucleo-build.tar.gz
+          if-no-files-found: error
+          retention-days: 30
 
 
       - name: Recuperar error de compilacion
