@@ -128,6 +128,26 @@ jobs:
 
           cat resultado-nucleo.txt
 
+
+      - name: Recuperar error de compilacion
+        if: always()
+        shell: bash
+        run: |
+          echo "Buscando registros de compilacion..."
+
+          find /tmp -maxdepth 1 \
+            -name 'logbuildMingw*' -print
+
+          if [ -f /tmp/logbuildMingwCore-x86_64 ]; then
+            cp /tmp/logbuildMingwCore-x86_64 \
+              error-compilacion-nucleo.txt
+
+            echo "=== ULTIMAS 100 LINEAS ==="
+            tail -100 error-compilacion-nucleo.txt
+          else
+            echo "No se encontro el registro de make"
+          fi
+
       - name: Guardar registros
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,6 +155,7 @@ jobs:
           name: informe-nucleo-avidemux
           path: |
             compilacion-nucleo.txt
+            error-compilacion-nucleo.txt
             resultado-nucleo.txt
             avidemux/buildMingwCore-x86_64/CMakeCache.txt
             avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeConfigureLog.yaml
