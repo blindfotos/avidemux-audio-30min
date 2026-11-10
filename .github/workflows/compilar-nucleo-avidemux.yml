@@ -262,6 +262,38 @@ jobs:
             2>&1 | tee "$GITHUB_WORKSPACE/compilacion-completa.txt"
 
 
+      - name: Recuperar error de compilacion Qt
+        if: always()
+        shell: bash
+        run: |
+          echo "=== REGISTRO DE COMPILACION QT ==="
+
+          ARCHIVO="/tmp/logbuildMingwQt5-x86_64"
+
+          if [ -f "$ARCHIVO" ]; then
+            cp "$ARCHIVO" error-compilacion-qt.txt
+
+            echo "=== ULTIMAS 100 LINEAS ==="
+            tail -100 "$ARCHIVO"
+
+            echo "=== ERRORES DETECTADOS ==="
+            grep -nEi \
+              'fatal error:|error:|undefined reference|No rule to make target' \
+              "$ARCHIVO" | tail -60 || true
+          else
+            echo "No se encontro el registro de Qt"
+          fi
+
+      - name: Guardar diagnostico Qt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-compilacion-qt
+          path: error-compilacion-qt.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+
       - name: Preparar paquete Avidemux
         if: success()
         shell: bash
