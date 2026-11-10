@@ -148,6 +148,55 @@ jobs:
             echo "No se encontro el registro de make"
           fi
 
+
+      - name: Diagnosticar error de ensamblador FFmpeg
+        if: always()
+        shell: bash
+        run: |
+          set +e
+
+          FFBUILD="$GITHUB_WORKSPACE/avidemux/buildMingwCore-x86_64/ffmpeg/build"
+          GCC="$GITHUB_WORKSPACE/mxe-source/usr/bin/x86_64-w64-mingw32.shared-gcc"
+
+          mkdir -p "$GITHUB_WORKSPACE/diagnostico-asm"
+
+          if [ ! -f "$FFBUILD/Makefile" ]; then
+            echo "No existe el Makefile de FFmpeg"
+            exit 0
+          fi
+
+          cd "$FFBUILD"
+
+          rm -f libavformat/adtsenc.o
+
+          echo "Reproduciendo el error con ensamblador conservado..."
+
+          make -j1 V=1 libavformat/adtsenc.o \
+            CC="$GCC -save-temps=obj" \
+            > "$GITHUB_WORKSPACE/diagnostico-asm/compilacion.txt" 2>&1
+
+          echo "Codigo de salida: $?" \
+            >> "$GITHUB_WORKSPACE/diagnostico-asm/compilacion.txt"
+
+          echo "Buscando archivos ensamblador..."
+
+          find . -type f -name 'adtsenc.s' \
+            -exec cp {} "$GITHUB_WORKSPACE/diagnostico-asm/" \;
+
+          if [ -f "$GITHUB_WORKSPACE/diagnostico-asm/adtsenc.s" ]; then
+            grep -n -i -C 5 \
+              -E 'shr|shrq|shrl' \
+              "$GITHUB_WORKSPACE/diagnostico-asm/adtsenc.s" \
+              > "$GITHUB_WORKSPACE/diagnostico-asm/instrucciones-shr.txt"
+          fi
+
+          echo "=== RESULTADO ==="
+          tail -60 "$GITHUB_WORKSPACE/diagnostico-asm/compilacion.txt"
+
+          echo "=== ARCHIVOS GENERADOS ==="
+          ls -lh "$GITHUB_WORKSPACE/diagnostico-asm/"
+
+
       - name: Guardar registros
         if: always()
         uses: actions/upload-artifact@v4
@@ -158,6 +207,7 @@ jobs:
             error-compilacion-nucleo.txt
             resultado-nucleo.txt
             avidemux/buildMingwCore-x86_64/CMakeCache.txt
+            diagnostico-asm/
             avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeConfigureLog.yaml
             avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeOutput.log
             avidemux/buildMingwCore-x86_64/CMakeFiles/CMakeError.log
