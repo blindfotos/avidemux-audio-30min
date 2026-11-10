@@ -185,6 +185,38 @@ jobs:
 
 
 
+      - name: Instalar QtWinExtras en MXE
+        shell: bash
+        run: |
+          set -e
+
+          cd mxe-source
+
+          echo "=== COMPILANDO QTWINEXTRAS ==="
+
+          test -f src/qtwinextras.mk
+
+          make -j2 \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            qtwinextras
+
+          echo "=== VERIFICANDO BIBLIOTECA ==="
+
+          DESTINO="$PWD/usr/x86_64-w64-mingw32.shared"
+
+          find "$DESTINO" \
+            -iname '*Qt5WinExtras*' \
+            -print
+
+          if [ -f "$DESTINO/lib/libQt5WinExtras.dll.a" ] \
+             || [ -f "$DESTINO/lib/libQt5WinExtras.a" ]; then
+            echo "QTWINEXTRAS INSTALADO CORRECTAMENTE"
+          else
+            echo "ERROR: falta la biblioteca Qt5WinExtras"
+            exit 1
+          fi
+
+
       - name: Diagnosticar biblioteca Qt5WinExtras
         shell: bash
         run: |
@@ -280,37 +312,7 @@ jobs:
           print(os.environ["LRELEASE"])
           PY
 
-
-
-      - name: Investigar dependencia Qt5WinExtras
-        shell: bash
-        run: |
-          echo "=== REFERENCIAS EN AVIDEMUX ==="
-          grep -RIn \
-            --include='CMakeLists.txt' \
-            --include='*.cmake' \
-            --include='*.cpp' \
-            --include='*.h' \
-            -E 'Qt5WinExtras|QtWinExtras|QWinTaskbar|QWinThumbnail' \
-            avidemux/avidemux \
-            | head -80 || true
-
-          echo "=== MODULOS QT DISPONIBLES ==="
-          find mxe-source/usr \
-            -iname '*WinExtras*' \
-            -print | head -50 || true
-
-          echo "=== RECETAS MXE ==="
-          find mxe-source/src \
-            -maxdepth 1 \
-            -iname '*qt*' \
-            -printf '%f\n' | sort
-
-          echo "=== DIAGNOSTICO FINALIZADO ==="
-
-          exit 1
-
-
+  
 
       - name: Compilar Avidemux completo
         shell: bash
