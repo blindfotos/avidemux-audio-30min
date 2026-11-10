@@ -184,6 +184,43 @@ jobs:
           PY
 
 
+
+      - name: Diagnosticar biblioteca Qt5WinExtras
+        shell: bash
+        run: |
+          set -e
+
+          BASE="$GITHUB_WORKSPACE/mxe-source/usr"
+          TARGET="$BASE/x86_64-w64-mingw32.shared"
+
+          echo "=== BIBLIOTECAS WINEXTRAS ==="
+          find "$BASE" \
+            \( -iname '*winextras*' \
+               -o -iname '*qt5win*' \) \
+            -print | head -80 || true
+
+          echo "=== CARPETA LIB DE WINDOWS ==="
+          ls -l "$TARGET/lib/"*WinExtras* \
+            2>/dev/null || true
+
+          echo "=== PAQUETES MXE ==="
+          find "$GITHUB_WORKSPACE/mxe-source/src" \
+            -maxdepth 1 -iname '*winextras*' \
+            -print
+
+          echo "=== RUTAS DEL COMPILADOR ==="
+          "$BASE/bin/x86_64-w64-mingw32.shared-g++" \
+            -print-search-dirs
+
+          echo "=== RESULTADO ==="
+          if [ -f "$TARGET/lib/libQt5WinExtras.dll.a" ] \
+             || [ -f "$TARGET/lib/libQt5WinExtras.a" ]; then
+            echo "BIBLIOTECA ENCONTRADA"
+          else
+            echo "BIBLIOTECA NO ENCONTRADA"
+          fi
+
+
       - name: Preparar herramientas de traduccion Qt5
         shell: bash
         run: |
