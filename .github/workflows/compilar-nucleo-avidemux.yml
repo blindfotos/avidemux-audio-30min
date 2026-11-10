@@ -72,10 +72,32 @@ jobs:
 
           echo "$BASE/bin" >> "$GITHUB_PATH"
 
+
       - name: Descargar Avidemux 2.8.1
+        shell: bash
         run: |
+          set -e
+
           git clone https://github.com/mean00/avidemux2.git avidemux
           git -C avidemux checkout 2.8.1
+
+          echo "=== SUBMODULOS ==="
+          git -C avidemux submodule status || true
+
+          echo "=== DESCARGANDO SUBMODULOS ==="
+          git -C avidemux submodule update --init --recursive
+
+          echo "=== COMPROBANDO TRADUCCIONES ==="
+          ls -la avidemux/avidemux/qt4/i18n/ || true
+
+          if [ ! -f avidemux/avidemux/qt4/i18n/CMakeLists.txt ]; then
+            echo "ERROR: sigue faltando i18n/CMakeLists.txt"
+            echo "Es necesario revisar como se distribuyen"
+            echo "las traducciones en Avidemux 2.8.1"
+            exit 1
+          fi
+
+          echo "Archivos de traduccion encontrados"
 
       - name: Aplicar parche de 30 minutos
         run: |
