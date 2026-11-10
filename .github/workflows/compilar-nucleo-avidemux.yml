@@ -184,6 +184,66 @@ jobs:
           PY
 
 
+      - name: Preparar herramientas de traduccion Qt5
+        shell: bash
+        run: |
+          set -e
+
+          sudo apt-get update
+          sudo apt-get install -y qttools5-dev-tools
+
+          echo "=== LOCALIZANDO LRELEASE ==="
+
+          LRELEASE=""
+
+          for candidato in \
+            /usr/lib/qt5/bin/lrelease \
+            /usr/bin/lrelease; do
+            if [ -x "$candidato" ]; then
+              LRELEASE="$candidato"
+              break
+            fi
+          done
+
+          if [ -z "$LRELEASE" ]; then
+            echo "ERROR: no se encuentra lrelease"
+            exit 1
+          fi
+
+          echo "Encontrado: $LRELEASE"
+          "$LRELEASE" -version
+
+          echo "=== CONFIGURANDO AVIDEMUX ==="
+
+          ARCHIVO="avidemux/avidemux/qt4/i18n/Ts.cmake"
+
+          test -f "$ARCHIVO"
+
+          export LRELEASE
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          archivo = Path(
+              "avidemux/avidemux/qt4/i18n/Ts.cmake"
+          )
+
+          contenido = archivo.read_text()
+
+          configuracion = (
+              'set(LRELEASE_EXECUTABLE "'
+              + os.environ["LRELEASE"]
+              + '" CACHE FILEPATH '
+              + '"Qt5 translation compiler" FORCE)\n'
+          )
+
+          archivo.write_text(configuracion + contenido)
+
+          print("Ruta de lrelease configurada:")
+          print(os.environ["LRELEASE"])
+          PY
+
+
       - name: Compilar Avidemux completo
         shell: bash
         run: |
