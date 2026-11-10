@@ -281,6 +281,37 @@ jobs:
           PY
 
 
+
+      - name: Investigar dependencia Qt5WinExtras
+        shell: bash
+        run: |
+          echo "=== REFERENCIAS EN AVIDEMUX ==="
+          grep -RIn \
+            --include='CMakeLists.txt' \
+            --include='*.cmake' \
+            --include='*.cpp' \
+            --include='*.h' \
+            -E 'Qt5WinExtras|QtWinExtras|QWinTaskbar|QWinThumbnail' \
+            avidemux/avidemux \
+            | head -80 || true
+
+          echo "=== MODULOS QT DISPONIBLES ==="
+          find mxe-source/usr \
+            -iname '*WinExtras*' \
+            -print | head -50 || true
+
+          echo "=== RECETAS MXE ==="
+          find mxe-source/src \
+            -maxdepth 1 \
+            -iname '*qt*' \
+            -printf '%f\n' | sort
+
+          echo "=== DIAGNOSTICO FINALIZADO ==="
+
+          exit 1
+
+
+
       - name: Compilar Avidemux completo
         shell: bash
         run: |
