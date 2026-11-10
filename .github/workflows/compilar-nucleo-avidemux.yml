@@ -22,7 +22,7 @@ jobs:
             intltool libtool libtool-bin nasm yasm \
             patch wget curl unzip p7zip-full xz-utils \
             texinfo gettext libssl-dev \
-            libgdk-pixbuf2.0-dev lzip
+            libgdk-pixbuf2.0-dev lzip python3-mako
 
       - name: Descargar MXE
         run: |
