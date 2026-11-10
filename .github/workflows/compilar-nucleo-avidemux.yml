@@ -205,9 +205,13 @@ jobs:
           echo "=== LOCALIZANDO INSTALACION ===" \
             | tee -a resultado-nucleo.txt
 
+
           find avidemux -type f \
             -name '*ADM_core*' \
-            -print | head -80 | tee -a resultado-nucleo.txt
+            -print > listado-archivos-nucleo.txt
+
+          head -80 listado-archivos-nucleo.txt \
+            | tee -a resultado-nucleo.txt
 
           echo "=== GUARDANDO DIRECTORIOS DEL NUCLEO ==="
 
