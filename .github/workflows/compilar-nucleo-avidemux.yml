@@ -92,6 +92,75 @@ jobs:
 
           echo "Parche verificado"
 
+      - name: Corregir ensamblador FFmpeg para GCC 15
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import tarfile
+          import tempfile
+          import os
+          import io
+          from pathlib import Path
+
+          archivo = Path(
+              "avidemux/avidemux_core/ffmpeg_package/"
+              "ffmpeg-4.4.2.tar.bz2"
+          )
+
+          temporal = archivo.with_suffix(".tmp")
+
+          cambios = 0
+
+          with tarfile.open(archivo, "r:bz2") as origen:
+              with tarfile.open(temporal, "w:bz2") as destino:
+                  for miembro in origen:
+                      if not miembro.isfile():
+                          destino.addfile(miembro)
+                          continue
+
+                      contenido = origen.extractfile(miembro).read()
+
+                      if miembro.name.endswith(
+                          "/libavcodec/x86/mathops.h"
+                      ):
+                          anterior = (
+                              b'"ic" ((uint8_t)(-s))'
+                          )
+                          nuevo = (
+                              b'"c" ((uint8_t)(-s))'
+                          )
+
+                          cantidad = contenido.count(anterior)
+
+                          if cantidad != 2:
+                              raise RuntimeError(
+                                  "Se esperaban 2 cambios, "
+                                  f"encontrados {cantidad}"
+                              )
+
+                          contenido = contenido.replace(
+                              anterior, nuevo
+                          )
+                          cambios += cantidad
+
+                      miembro.size = len(contenido)
+                      destino.addfile(
+                          miembro, io.BytesIO(contenido)
+                      )
+
+          if cambios != 2:
+              raise RuntimeError(
+                  "No se encontraron las dos funciones"
+              )
+
+          os.replace(temporal, archivo)
+
+          print(
+              "FFmpeg corregido correctamente: "
+              "2 restricciones de ensamblador"
+          )
+          PY
+
       - name: Compilar nucleo de Avidemux
         shell: bash
         run: |
