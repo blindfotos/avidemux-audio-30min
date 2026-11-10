@@ -161,7 +161,8 @@ jobs:
           )
           PY
 
-      - name: Compilar nucleo de Avidemux
+
+      - name: Compilar Avidemux completo
         shell: bash
         run: |
           set -o pipefail
@@ -171,11 +172,56 @@ jobs:
           bash bootStrapCrossMingwQt5_mxe.sh \
             --64 \
             --mxe-root="$GITHUB_WORKSPACE/mxe-source" \
-            --without-qt \
+            --with-core \
+            --with-qt \
             --without-cli \
-            --without-plugins \
+            --with-plugins \
             --nopkg \
-            2>&1 | tee "$GITHUB_WORKSPACE/compilacion-nucleo.txt"
+            2>&1 | tee "$GITHUB_WORKSPACE/compilacion-completa.txt"
+
+
+      - name: Preparar paquete Avidemux
+        if: success()
+        shell: bash
+        run: |
+          set -e
+
+          ORIGEN="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared/out/avidemux"
+
+          echo "=== COMPROBANDO INSTALACION ==="
+
+          test -d "$ORIGEN"
+
+          find "$ORIGEN" -maxdepth 4 -type f \
+            > archivos-instalados.txt
+
+          echo "=== EJECUTABLES ==="
+          find "$ORIGEN" -type f -iname '*.exe'
+
+          echo "=== BIBLIOTECAS ==="
+          find "$ORIGEN" -type f -iname '*.dll' | head -40
+
+          echo "=== CREANDO PAQUETE ==="
+
+          mkdir -p paquete-completo
+
+          tar -czf \
+            paquete-completo/avidemux-281-windows64.tar.gz \
+            -C "$ORIGEN" .
+
+          ls -lh paquete-completo/
+
+      - name: Guardar Avidemux completo
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avidemux-281-windows64-30min
+          path: |
+            paquete-completo/avidemux-281-windows64.tar.gz
+            archivos-instalados.txt
+          if-no-files-found: error
+          retention-days: 30
+
 
 
       - name: Comprobar archivos y preparar nucleo
@@ -316,6 +362,10 @@ jobs:
         with:
           name: informe-nucleo-avidemux
           path: |
+            compilacion-completa.txt
+            archivos-instalados.txt
+            avidemux/buildMingwQt5-x86_64/CMakeCache.txt
+            avidemux/buildMingwPluginsQt5-x86_64/CMakeCache.txt
             compilacion-nucleo.txt
             error-compilacion-nucleo.txt
             resultado-nucleo.txt
