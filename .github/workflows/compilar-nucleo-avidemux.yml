@@ -387,6 +387,43 @@ jobs:
             2>&1 | tee "$GITHUB_WORKSPACE/compilacion-completa.txt"
 
 
+      - name: Recuperar error de complementos
+        if: always()
+        shell: bash
+        run: |
+          echo "=== REGISTROS DE COMPLEMENTOS ==="
+
+          mkdir -p diagnostico-plugins
+
+          for archivo in /tmp/logbuildMingwPlugins*; do
+            if [ -f "$archivo" ]; then
+              nombre="$(basename "$archivo")"
+
+              cp "$archivo" \
+                "diagnostico-plugins/$nombre.txt"
+
+              echo "=== ERROR EN $nombre ==="
+
+              tail -100 "$archivo"
+
+              echo "=== MENSAJES DE ERROR ==="
+
+              grep -nEi \
+                'fatal error:|error:|undefined reference|No rule to make target' \
+                "$archivo" | tail -50 || true
+            fi
+          done
+
+      - name: Guardar diagnostico de complementos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-complementos
+          path: diagnostico-plugins/
+          if-no-files-found: warn
+          retention-days: 30
+
+
       - name: Recuperar error de compilacion Qt
         if: always()
         shell: bash
