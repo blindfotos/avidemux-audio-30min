@@ -197,26 +197,26 @@ jobs:
           test -f src/qtwinextras.mk
 
 
-make -j2 \
-  MXE_TARGETS=x86_64-w64-mingw32.shared \
-  qtwinextras libass
+          make -j2 \
+            MXE_TARGETS=x86_64-w64-mingw32.shared \
+            qtwinextras libass
 
-echo "=== COMPROBANDO LIBASS ==="
+          echo "=== COMPROBANDO LIBASS ==="
 
-DESTINO="$PWD/usr/x86_64-w64-mingw32.shared"
+          DESTINO="$PWD/usr/x86_64-w64-mingw32.shared"
 
-find "$DESTINO" \
-  \( -name 'libass.pc' \
-     -o -name 'libass.dll.a' \
-     -o -name 'libass.a' \) \
-  -print
+          find "$DESTINO" \
+            \( -name 'libass.pc' \
+               -o -name 'libass.dll.a' \
+               -o -name 'libass.a' \) \
+            -print
 
-if [ ! -f "$DESTINO/lib/pkgconfig/libass.pc" ]; then
-  echo "ERROR: no se encuentra libass.pc"
-  exit 1
-fi
+          if [ ! -f "$DESTINO/lib/pkgconfig/libass.pc" ]; then
+            echo "ERROR: no se encuentra libass.pc"
+            exit 1
+          fi
 
-echo "LIBASS INSTALADO"
+          echo "LIBASS INSTALADO"
 
           echo "=== VERIFICANDO BIBLIOTECA ==="
 
