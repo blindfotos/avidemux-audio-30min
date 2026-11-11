@@ -419,6 +419,45 @@ jobs:
           PY
   
 
+      - name: Desactivar filtro ivtcDupeRemover
+        shell: bash
+        run: |
+          set -e
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          archivo = Path(
+              "avidemux/avidemux_plugins/"
+              "ADM_videoFilters6/CMakeLists.txt"
+          )
+
+          contenido = archivo.read_text()
+
+          anterior = "ADD_SUBDIRECTORY(ivtcDupeRemover)"
+          nuevo = "# ADD_SUBDIRECTORY(ivtcDupeRemover)"
+
+          if contenido.count(anterior) != 1:
+              raise RuntimeError(
+                  "No se encontro exactamente una "
+                  "referencia a ivtcDupeRemover"
+              )
+
+          archivo.write_text(
+              contenido.replace(anterior, nuevo)
+          )
+
+          print("ivtcDupeRemover desactivado")
+
+          if "ADD_SUBDIRECTORY(yadif)" not in contenido:
+              raise RuntimeError(
+                  "No se encontro el filtro Yadif"
+              )
+
+          print("Yadif permanece activado")
+          PY
+
+
       - name: Compilar Avidemux completo
         shell: bash
         run: |
