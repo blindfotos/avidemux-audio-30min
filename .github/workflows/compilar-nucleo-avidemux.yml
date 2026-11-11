@@ -39,7 +39,7 @@ jobs:
           path: |
             mxe-source/usr
             mxe-source/pkg
-          key: mxe-64bits-bdc0e9e2-x265-v1
+          key: mxe-64bits-bdc0e9e2-qtwinextras-v1
           fail-on-cache-miss: true
 
       - name: Corregir fechas de MXE
@@ -242,7 +242,8 @@ jobs:
           path: |
             mxe-source/usr
             mxe-source/pkg
-          key: mxe-64bits-bdc0e9e2-qtwinextras-v1
+
+          key: mxe-64bits-bdc0e9e2-qtwinextras-libass-v1
 
 
       - name: Diagnosticar biblioteca Qt5WinExtras
@@ -353,6 +354,22 @@ jobs:
           test -f "$QT5_LIB/libQt5WinExtras.a"
 
           export LIBRARY_PATH="$QT5_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
+
+          MXE_LIB="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared/lib"
+
+          export PKG_CONFIG_LIBDIR="$MXE_LIB/pkgconfig"
+          export PKG_CONFIG_PATH="$MXE_LIB/pkgconfig"
+
+          echo "=== COMPROBANDO LIBASS ==="
+
+          PKG_CONFIG="$GITHUB_WORKSPACE/mxe-source/usr/bin/x86_64-w64-mingw32.shared-pkg-config"
+
+          if [ -x "$PKG_CONFIG" ]; then
+            "$PKG_CONFIG" --modversion libass
+          else
+            echo "ERROR: no se encuentra pkg-config de MXE"
+            exit 1
+          fi
 
           echo "=== RUTA DE QTWINEXTRAS ==="
           echo "$LIBRARY_PATH"
