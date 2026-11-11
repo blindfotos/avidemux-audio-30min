@@ -598,6 +598,35 @@ jobs:
           head -40 listado-bibliotecas.txt
 
 
+          echo "=== BUSCANDO DLL DE MINGW ==="
+
+          find "$GITHUB_WORKSPACE/mxe-source/usr" \
+            -type f \
+            \( -name 'libstdc++-6.dll' \
+               -o -name 'libgcc_s_seh-1.dll' \
+               -o -name 'libwinpthread-1.dll' \) \
+            -print > dll-mingw-encontradas.txt
+
+          cat dll-mingw-encontradas.txt
+
+          echo "=== COPIANDO DLL NECESARIAS ==="
+
+          for nombre in \
+            libstdc++-6.dll \
+            libgcc_s_seh-1.dll \
+            libwinpthread-1.dll; do
+
+            origen="$(find \
+              "$GITHUB_WORKSPACE/mxe-source/usr" \
+              -type f -name "$nombre" -print -quit)"
+
+            if [ -n "$origen" ]; then
+              cp -v "$origen" "$ORIGEN/"
+            else
+              echo "AVISO: no se encontro $nombre"
+            fi
+          done
+
 
           echo "=== CREANDO PAQUETE ==="
 
