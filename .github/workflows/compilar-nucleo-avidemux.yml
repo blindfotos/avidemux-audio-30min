@@ -589,8 +589,15 @@ jobs:
           echo "=== EJECUTABLES ==="
           find "$ORIGEN" -type f -iname '*.exe'
 
+
           echo "=== BIBLIOTECAS ==="
-          find "$ORIGEN" -type f -iname '*.dll' | head -40
+
+          find "$ORIGEN" -type f -iname '*.dll' \
+            > listado-bibliotecas.txt
+
+          head -40 listado-bibliotecas.txt
+
+
 
           echo "=== CREANDO PAQUETE ==="
 
