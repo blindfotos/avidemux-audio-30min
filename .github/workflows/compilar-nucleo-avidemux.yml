@@ -341,6 +341,82 @@ jobs:
           print(os.environ["LRELEASE"])
           PY
 
+
+      - name: Corregir compatibilidad x265 y FluxSmooth
+        shell: bash
+        run: |
+          set -e
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # 1. Compatibilidad con x265 moderno
+          archivo = Path(
+              "avidemux/avidemux_plugins/"
+              "ADM_videoEncoder/x265/ADM_x265Setup.cpp"
+          )
+
+          texto = archivo.read_text()
+
+          anterior = "param.rc.statFileName=strdup(logFile);"
+          nuevo = (
+              "snprintf(param.rc.statFileName, "
+              "sizeof(param.rc.statFileName), "
+              '"%s", logFile);'
+          )
+
+          cantidad = texto.count(anterior)
+          if cantidad != 2:
+              raise RuntimeError(
+                  f"x265: esperadas 2 apariciones, "
+                  f"encontradas {cantidad}"
+              )
+
+          archivo.write_text(
+              texto.replace(anterior, nuevo)
+          )
+
+          print("x265: corregidas 2 asignaciones")
+
+          # 2. Desactivar exclusivamente FluxSmooth
+          carpeta = Path(
+              "avidemux/avidemux_plugins/"
+              "ADM_videoFilters6"
+          )
+
+          encontrados = []
+
+          for cmake in carpeta.rglob("CMakeLists.txt"):
+              texto = cmake.read_text()
+              patron = (
+                  r"(?im)^[ \t]*"
+                  r"add_subdirectory\s*\(\s*"
+                  r"fluxSmooth\s*\)[ \t]*$"
+              )
+
+              modificado, cantidad = re.subn(
+                  patron,
+                  "# FluxSmooth desactivado por "
+                  "incompatibilidad de ensamblador",
+                  texto
+              )
+
+              if cantidad:
+                  cmake.write_text(modificado)
+                  encontrados.append(str(cmake))
+
+          if len(encontrados) != 1:
+              raise RuntimeError(
+                  "No se pudo localizar de forma "
+                  "univoca la activacion de FluxSmooth. "
+                  f"Coincidencias: {encontrados}"
+              )
+
+          print("FluxSmooth desactivado en:")
+          print(encontrados[0])
+          print("Correcciones completadas")
+          PY
   
 
       - name: Compilar Avidemux completo
