@@ -571,102 +571,243 @@ jobs:
           retention-days: 30
 
 
-
       - name: Preparar paquete Avidemux
         if: success()
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           BASE="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared"
           ORIGEN="$BASE/out/avidemux"
+          OBJDUMP="$GITHUB_WORKSPACE/mxe-source/usr/bin/x86_64-w64-mingw32.shared-objdump"
 
-          echo "=== COMPROBANDO INSTALACION ==="
-          test -d "$ORIGEN"
+          echo "=== COMPROBANDO AVIDEMUX ==="
           test -f "$ORIGEN/avidemux.exe"
 
-          find "$ORIGEN" -maxdepth 4 -type f > archivos-instalados.txt
+          if [ ! -x "$OBJDUMP" ]; then
+            OBJDUMP="$(command -v x86_64-w64-mingw32.shared-objdump || true)"
+          fi
 
-          echo "=== EJECUTABLES ==="
-          find "$ORIGEN" -type f -iname '*.exe'
+          if [ -z "$OBJDUMP" ] || [ ! -x "$OBJDUMP" ]; then
+            echo "ERROR: no se encuentra objdump de MXE"
+            exit 1
+          fi
 
-          echo "=== BIBLIOTECAS DE AVIDEMUX ==="
-          find "$ORIGEN" -type f -iname '*.dll' > listado-bibliotecas.txt
-          head -40 listado-bibliotecas.txt
+          export BASE ORIGEN OBJDUMP
 
-          echo "=== COPIANDO DEPENDENCIAS DE WINDOWS ==="
+          echo "=== RESOLVIENDO DEPENDENCIAS DLL ==="
 
-          for nombre in \
-            libstdc++-6.dll \
-            libgcc_s_seh-1.dll \
-            libwinpthread-1.dll \
-            Qt5Core.dll \
-            Qt5Gui.dll \
-            Qt5Network.dll \
-            Qt5Widgets.dll \
-            Qt5WinExtras.dll \
-            Qt5Xml.dll \
-            Qt5Svg.dll \
-            Qt5OpenGL.dll \
-            libcrypto-4-x64.dll \
-            libssl-4-x64.dll \
-            zlib1.dll; do
+          python3 - <<'PY'
+          import os
+          import re
+          import shutil
+          import subprocess
+          import sys
+          from collections import deque
+          from pathlib import Path
 
-            echo "Buscando $nombre"
+          base = Path(os.environ["BASE"])
+          origen = Path(os.environ["ORIGEN"])
+          objdump = os.environ["OBJDUMP"]
 
-            archivo=""
+          rutas = [
+              base / "bin",
+              base / "qt5" / "bin",
+          ]
 
-            if [ -f "$BASE/bin/$nombre" ]; then
-              archivo="$BASE/bin/$nombre"
-            else
-              archivo="$(find "$BASE" -type f -name "$nombre" \
-                ! -path '*/out/avidemux/*' \
-                ! -path '*/tmp-*/*' \
-                -print -quit)"
-            fi
+          disponibles = {}
 
-            if [ -n "$archivo" ]; then
-              cp -v "$archivo" "$ORIGEN/"
-            elif [ -f "$ORIGEN/$nombre" ]; then
-              echo "Ya estaba incluido: $nombre"
-            else
-              echo "AVISO: no se encontro $nombre"
-            fi
-          done
+          for carpeta in rutas:
+              if not carpeta.is_dir():
+                  continue
 
-          echo "=== COMPROBANDO DLL OBLIGATORIAS ==="
+              for raiz, directorios, archivos in os.walk(carpeta):
+                  for nombre in archivos:
+                      if nombre.lower().endswith(".dll"):
+                          ruta = Path(raiz) / nombre
+                          disponibles.setdefault(nombre.lower(), ruta)
 
-          for nombre in \
-            Qt5Core.dll \
-            Qt5Gui.dll \
-            Qt5Network.dll \
-            Qt5Widgets.dll \
-            libcrypto-4-x64.dll \
-            libssl-4-x64.dll \
-            zlib1.dll; do
+          print("DLL disponibles en MXE:", len(disponibles), flush=True)
 
-            if [ ! -f "$ORIGEN/$nombre" ]; then
-              echo "ERROR: falta $nombre"
-              echo "=== BUSQUEDA DE DIAGNOSTICO ==="
-              find "$BASE" -type f \( \
-                -iname '*crypto*.dll' -o \
-                -iname '*ssl*.dll' -o \
-                -iname '*zlib*.dll' \) -print
-              exit 1
-            fi
-          done
+          sistema = {
+              "kernel32.dll", "user32.dll", "gdi32.dll",
+              "advapi32.dll", "shell32.dll", "ole32.dll",
+              "oleaut32.dll", "comdlg32.dll", "comctl32.dll",
+              "shlwapi.dll", "shcore.dll", "ws2_32.dll",
+              "wsock32.dll", "winmm.dll", "version.dll",
+              "imm32.dll", "setupapi.dll", "cfgmgr32.dll",
+              "crypt32.dll", "bcrypt.dll", "bcryptprimitives.dll",
+              "secur32.dll", "security.dll", "rpcrt4.dll",
+              "ntdll.dll", "msvcrt.dll", "ucrtbase.dll",
+              "psapi.dll", "iphlpapi.dll", "dnsapi.dll",
+              "winspool.drv", "dwmapi.dll", "uxtheme.dll",
+              "opengl32.dll", "glu32.dll", "gdiplus.dll",
+              "msimg32.dll", "d3d9.dll", "d3d11.dll",
+              "dxgi.dll", "dxguid.dll", "d2d1.dll",
+              "dwrite.dll", "wtsapi32.dll", "userenv.dll",
+              "netapi32.dll", "mpr.dll", "wininet.dll",
+              "winhttp.dll", "normaliz.dll", "wldap32.dll",
+              "ncrypt.dll", "cryptui.dll", "propsys.dll",
+              "powrprof.dll", "avrt.dll", "dbghelp.dll",
+              "hid.dll", "cfgmgr32.dll", "msvcp_win.dll",
+              "usp10.dll", "urlmon.dll", "oleacc.dll",
+              "sensapi.dll", "dhcpcsvc.dll",
+              "dhcpcsvc6.dll", "mswsock.dll",
+              "cryptbase.dll", "profapi.dll",
+              "kernelbase.dll", "user32.dll",
+              "ntmarta.dll", "wintrust.dll",
+              "msasn1.dll", "clbcatq.dll",
+              "iertutil.dll", "nsi.dll",
+              "winsta.dll", "wlanapi.dll",
+              "bluetoothapis.dll", "bthprops.cpl",
+              "vfw32.dll", "avicap32.dll",
+              "mf.dll", "mfplat.dll", "mfreadwrite.dll",
+              "mfuuid.dll", "strmiids.dll",
+              "quartz.dll", "msdmo.dll",
+              "d3dcompiler_47.dll", "dxva2.dll",
+              "d3d12.dll", "dxcore.dll",
+              "windowscodecs.dll",
+          }
 
-          echo "=== DLL OBLIGATORIAS ENCONTRADAS ==="
+          def es_sistema(nombre):
+              nombre = nombre.lower()
+              return (
+                  nombre in sistema
+                  or nombre.startswith("api-ms-win-")
+                  or nombre.startswith("ext-ms-win-")
+              )
 
-          echo "=== CREANDO PAQUETE ==="
+          patron = re.compile(
+              r"DLL Name:\s*(\S+)", re.IGNORECASE
+          )
+
+          def dependencias(archivo):
+              resultado = subprocess.run(
+                  [objdump, "-p", str(archivo)],
+                  capture_output=True,
+                  text=True,
+                  errors="replace",
+              )
+              if resultado.returncode != 0:
+                  raise RuntimeError(
+                      f"No se pudo analizar: {archivo}"
+                  )
+              return patron.findall(resultado.stdout)
+
+          def archivos_binarios():
+              for archivo in origen.rglob("*"):
+                  if archivo.is_file() and (
+                      archivo.suffix.lower() in (".exe", ".dll")
+                  ):
+                      yield archivo
+
+          cola = deque(archivos_binarios())
+          procesados = set()
+          faltantes = set()
+          copiados = set()
+
+          while cola:
+              archivo = cola.popleft()
+              identificador = str(archivo.resolve()).lower()
+
+              if identificador in procesados:
+                  continue
+
+              procesados.add(identificador)
+
+              for nombre in dependencias(archivo):
+                  clave = nombre.lower()
+
+                  if es_sistema(clave):
+                      continue
+
+                  destino = origen / nombre
+
+                  if destino.is_file():
+                      cola.append(destino)
+                      continue
+
+                  encontrado = None
+
+                  for candidato in origen.iterdir():
+                      if (
+                          candidato.is_file()
+                          and candidato.name.lower() == clave
+                      ):
+                          encontrado = candidato
+                          break
+
+                  if encontrado:
+                      cola.append(encontrado)
+                      continue
+
+                  fuente = disponibles.get(clave)
+
+                  if fuente is None:
+                      faltantes.add(clave)
+                      print(
+                          "NO ENCONTRADA:",
+                          nombre,
+                          "requerida por",
+                          archivo.name,
+                          flush=True,
+                      )
+                      continue
+
+                  shutil.copy2(fuente, destino)
+                  copiados.add(clave)
+                  cola.append(destino)
+
+                  print(
+                      "COPIADA:",
+                      nombre,
+                      "desde",
+                      fuente,
+                      flush=True,
+                  )
+
+          print("=== RESULTADO ===")
+          print("Archivos analizados:", len(procesados))
+          print("DLL copiadas:", len(copiados))
+          print("Dependencias pendientes:", len(faltantes))
+
+          with open(
+              "diagnostico-dll.txt", "w", encoding="utf-8"
+          ) as informe:
+              informe.write(
+                  f"Archivos analizados: {len(procesados)}\n"
+              )
+              informe.write(
+                  f"DLL copiadas: {len(copiados)}\n"
+              )
+              informe.write("DLL copiadas:\n")
+              for nombre in sorted(copiados):
+                  informe.write(f"  {nombre}\n")
+
+              informe.write("\nDLL pendientes:\n")
+              for nombre in sorted(faltantes):
+                  informe.write(f"  {nombre}\n")
+
+          if faltantes:
+              print("ERROR: faltan bibliotecas DLL")
+              sys.exit(1)
+
+          print("Dependencias comprobadas correctamente")
+          PY
+
+          echo "=== CREANDO PAQUETE COMPLETO ==="
+
           mkdir -p paquete-completo
 
           tar -czf \
             paquete-completo/avidemux-281-windows64.tar.gz \
             -C "$ORIGEN" .
 
+          cp diagnostico-dll.txt paquete-completo/
+
+          echo "=== PAQUETE PREPARADO ==="
           ls -lh paquete-completo/
-  
+
 
       - name: Guardar Avidemux completo
         if: success()
