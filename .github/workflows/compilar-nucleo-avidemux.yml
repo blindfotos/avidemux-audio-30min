@@ -628,9 +628,10 @@ jobs:
           done
 
 
-          echo "=== COPIANDO BIBLIOTECAS QT5 ==="
 
-          QT="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared/bin"
+          echo "=== LOCALIZANDO BIBLIOTECAS QT5 ==="
+
+          BASE="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared"
 
           for nombre in \
             Qt5Core.dll \
@@ -642,8 +643,12 @@ jobs:
             Qt5Svg.dll \
             Qt5OpenGL.dll; do
 
-            if [ -f "$QT/$nombre" ]; then
-              cp -v "$QT/$nombre" "$ORIGEN/"
+            archivo="$(find "$BASE" \
+              -type f -name "$nombre" -print -quit)"
+
+            if [ -n "$archivo" ]; then
+              echo "Copiando $archivo"
+              cp -v "$archivo" "$ORIGEN/"
             else
               echo "AVISO: no encontrada $nombre"
             fi
@@ -666,6 +671,7 @@ jobs:
           echo "Bibliotecas Qt5 principales incluidas"
 
 
+          
           echo "=== CREANDO PAQUETE ==="
 
           mkdir -p paquete-completo
