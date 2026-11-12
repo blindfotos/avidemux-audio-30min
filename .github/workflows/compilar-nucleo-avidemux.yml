@@ -628,6 +628,44 @@ jobs:
           done
 
 
+          echo "=== COPIANDO BIBLIOTECAS QT5 ==="
+
+          QT="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared/bin"
+
+          for nombre in \
+            Qt5Core.dll \
+            Qt5Gui.dll \
+            Qt5Network.dll \
+            Qt5Widgets.dll \
+            Qt5WinExtras.dll \
+            Qt5Xml.dll \
+            Qt5Svg.dll \
+            Qt5OpenGL.dll; do
+
+            if [ -f "$QT/$nombre" ]; then
+              cp -v "$QT/$nombre" "$ORIGEN/"
+            else
+              echo "AVISO: no encontrada $nombre"
+            fi
+          done
+
+          echo "=== COMPROBANDO QT5 ==="
+
+          for nombre in \
+            Qt5Core.dll \
+            Qt5Gui.dll \
+            Qt5Network.dll \
+            Qt5Widgets.dll; do
+
+            if [ ! -f "$ORIGEN/$nombre" ]; then
+              echo "ERROR: falta $nombre"
+              exit 1
+            fi
+          done
+
+          echo "Bibliotecas Qt5 principales incluidas"
+
+
           echo "=== CREANDO PAQUETE ==="
 
           mkdir -p paquete-completo
