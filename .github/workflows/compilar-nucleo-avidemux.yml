@@ -649,6 +649,7 @@ jobs:
               "winhttp.dll", "normaliz.dll", "wldap32.dll",
               "ncrypt.dll", "cryptui.dll", "propsys.dll",
               "powrprof.dll", "avrt.dll", "dbghelp.dll",
+              "imagehlp.dll",
               "hid.dll", "cfgmgr32.dll", "msvcp_win.dll",
               "usp10.dll", "urlmon.dll", "oleacc.dll",
               "sensapi.dll", "dhcpcsvc.dll",
