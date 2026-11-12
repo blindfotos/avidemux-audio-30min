@@ -571,69 +571,35 @@ jobs:
           retention-days: 30
 
 
+
       - name: Preparar paquete Avidemux
         if: success()
         shell: bash
         run: |
           set -e
 
-          ORIGEN="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared/out/avidemux"
+          BASE="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared"
+          ORIGEN="$BASE/out/avidemux"
 
           echo "=== COMPROBANDO INSTALACION ==="
-
           test -d "$ORIGEN"
+          test -f "$ORIGEN/avidemux.exe"
 
-          find "$ORIGEN" -maxdepth 4 -type f \
-            > archivos-instalados.txt
+          find "$ORIGEN" -maxdepth 4 -type f > archivos-instalados.txt
 
           echo "=== EJECUTABLES ==="
           find "$ORIGEN" -type f -iname '*.exe'
 
-
-          echo "=== BIBLIOTECAS ==="
-
-          find "$ORIGEN" -type f -iname '*.dll' \
-            > listado-bibliotecas.txt
-
+          echo "=== BIBLIOTECAS DE AVIDEMUX ==="
+          find "$ORIGEN" -type f -iname '*.dll' > listado-bibliotecas.txt
           head -40 listado-bibliotecas.txt
 
-
-          echo "=== BUSCANDO DLL DE MINGW ==="
-
-          find "$GITHUB_WORKSPACE/mxe-source/usr" \
-            -type f \
-            \( -name 'libstdc++-6.dll' \
-               -o -name 'libgcc_s_seh-1.dll' \
-               -o -name 'libwinpthread-1.dll' \) \
-            -print > dll-mingw-encontradas.txt
-
-          cat dll-mingw-encontradas.txt
-
-          echo "=== COPIANDO DLL NECESARIAS ==="
+          echo "=== COPIANDO DEPENDENCIAS DE WINDOWS ==="
 
           for nombre in \
             libstdc++-6.dll \
             libgcc_s_seh-1.dll \
-            libwinpthread-1.dll; do
-
-            origen="$(find \
-              "$GITHUB_WORKSPACE/mxe-source/usr" \
-              -type f -name "$nombre" -print -quit)"
-
-            if [ -n "$origen" ]; then
-              cp -v "$origen" "$ORIGEN/"
-            else
-              echo "AVISO: no se encontro $nombre"
-            fi
-          done
-
-
-
-          echo "=== LOCALIZANDO BIBLIOTECAS QT5 ==="
-
-          BASE="$GITHUB_WORKSPACE/mxe-source/usr/x86_64-w64-mingw32.shared"
-
-          for nombre in \
+            libwinpthread-1.dll \
             Qt5Core.dll \
             Qt5Gui.dll \
             Qt5Network.dll \
@@ -641,39 +607,58 @@ jobs:
             Qt5WinExtras.dll \
             Qt5Xml.dll \
             Qt5Svg.dll \
-            Qt5OpenGL.dll; do
+            Qt5OpenGL.dll \
+            libcrypto-4-x64.dll \
+            libssl-4-x64.dll \
+            zlib1.dll; do
 
-            archivo="$(find "$BASE" \
-              -type f -name "$nombre" -print -quit)"
+            echo "Buscando $nombre"
+
+            archivo=""
+
+            if [ -f "$BASE/bin/$nombre" ]; then
+              archivo="$BASE/bin/$nombre"
+            else
+              archivo="$(find "$BASE" -type f -name "$nombre" \
+                ! -path '*/out/avidemux/*' \
+                ! -path '*/tmp-*/*' \
+                -print -quit)"
+            fi
 
             if [ -n "$archivo" ]; then
-              echo "Copiando $archivo"
               cp -v "$archivo" "$ORIGEN/"
+            elif [ -f "$ORIGEN/$nombre" ]; then
+              echo "Ya estaba incluido: $nombre"
             else
-              echo "AVISO: no encontrada $nombre"
+              echo "AVISO: no se encontro $nombre"
             fi
           done
 
-          echo "=== COMPROBANDO QT5 ==="
+          echo "=== COMPROBANDO DLL OBLIGATORIAS ==="
 
           for nombre in \
             Qt5Core.dll \
             Qt5Gui.dll \
             Qt5Network.dll \
-            Qt5Widgets.dll; do
+            Qt5Widgets.dll \
+            libcrypto-4-x64.dll \
+            libssl-4-x64.dll \
+            zlib1.dll; do
 
             if [ ! -f "$ORIGEN/$nombre" ]; then
               echo "ERROR: falta $nombre"
+              echo "=== BUSQUEDA DE DIAGNOSTICO ==="
+              find "$BASE" -type f \( \
+                -iname '*crypto*.dll' -o \
+                -iname '*ssl*.dll' -o \
+                -iname '*zlib*.dll' \) -print
               exit 1
             fi
           done
 
-          echo "Bibliotecas Qt5 principales incluidas"
+          echo "=== DLL OBLIGATORIAS ENCONTRADAS ==="
 
-
-          
           echo "=== CREANDO PAQUETE ==="
-
           mkdir -p paquete-completo
 
           tar -czf \
@@ -681,6 +666,7 @@ jobs:
             -C "$ORIGEN" .
 
           ls -lh paquete-completo/
+  
 
       - name: Guardar Avidemux completo
         if: success()
