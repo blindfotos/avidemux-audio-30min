@@ -796,6 +796,29 @@ jobs:
           print("Dependencias comprobadas correctamente")
           PY
 
+
+          echo "=== COPIANDO PLATAFORMA QT PARA WINDOWS ==="
+
+          mkdir -p "$ORIGEN/platforms"
+
+          PLATAFORMA="$(find "$BASE" -type f \
+            -name 'qwindows.dll' \
+            ! -path '*/out/avidemux/*' \
+            -print -quit)"
+
+          if [ -z "$PLATAFORMA" ]; then
+            echo "ERROR: no se encontro qwindows.dll"
+            exit 1
+          fi
+
+          echo "Encontrado: $PLATAFORMA"
+          cp -v "$PLATAFORMA" "$ORIGEN/platforms/"
+
+          test -s "$ORIGEN/platforms/qwindows.dll"
+
+          echo "=== PLATAFORMA QT COPIADA CORRECTAMENTE ==="
+
+
           echo "=== CREANDO PAQUETE COMPLETO ==="
 
           mkdir -p paquete-completo
